@@ -95,6 +95,13 @@
     opacity: 0; pointer-events: none; transition: opacity .2s;
   }
   .toast.show { opacity: 1; }
+  #focusSink { position: fixed; width: 1px; height: 1px; opacity: 0; outline: none; }
+  .diag {
+    position: fixed; left: 12px; top: 12px; z-index: 10; width: min(460px, 60vw); max-height: 60vh; overflow-y: auto;
+    background: rgba(0,0,0,.85); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 14px;
+    font: 15px/1.45 ui-monospace, monospace; white-space: pre-wrap; word-break: break-all;
+  }
+  .diag[hidden] { display: none; }
 
   /* Portrait / narrow screens: video on top, controls below */
   @media (orientation: portrait), (max-width: 760px) {
@@ -153,6 +160,8 @@
 </main>
 
 <div class="toast" id="toast"></div>
+<div id="focusSink" tabindex="-1"></div>
+<div class="diag" id="diag" hidden></div>
 
 <script>
 (() => {
@@ -178,6 +187,16 @@
     return (h ? h + ':' : '') + mm + ':' + String(sec).padStart(2, '0');
   };
   const thumb = (id) => id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : '';
+  // Test mode (open the page with ?test): shows which steering wheel signals arrive
+  const testMode = new URLSearchParams(location.search).has('test');
+  const diagLines = [];
+  function diag(msg) {
+    if (!testMode) return;
+    diagLines.unshift(new Date().toLocaleTimeString() + '  ' + msg);
+    diagLines.length = Math.min(diagLines.length, 30);
+    const el = $('diag'); el.hidden = false; el.textContent = diagLines.join('\n');
+  }
+  diag('mediaSession: ' + ('mediaSession' in navigator ? 'бар' : 'ЖОҚ') + '\nUA: ' + navigator.userAgent);
   let toastTimer;
   const toast = (msg) => {
     const t = $('toast'); t.textContent = msg; t.classList.add('show');
@@ -227,7 +246,9 @@
 
   // ---------- media session (steering wheel / Bluetooth / media keys) ----------
   const ms = 'mediaSession' in navigator ? navigator.mediaSession : null;
-  function setAction(name, fn) { try { ms && ms.setActionHandler(name, fn); } catch (_) {} }
+  function setAction(name, fn) {
+    try { ms && ms.setActionHandler(name, (d) => { diag('MediaSession: ' + name); fn(d); }); } catch (_) {}
+  }
   setAction('play', () => play());
   setAction('pause', () => pause());
   setAction('stop', () => pause());
@@ -475,10 +496,15 @@
   }
   renderQueue();
 
-  // Keyboard / hardware media keys (some head units send them as key events)
+  // Keyboard / hardware media keys. Android WebView based browsers (e.g. in car head
+  // units) may not support the Media Session API and deliver steering wheel buttons
+  // as key events instead; some only report the legacy keyCode.
+  const LEGACY_KEYS = { 176: 'MediaTrackNext', 177: 'MediaTrackPrevious', 178: 'MediaStop', 179: 'MediaPlayPause',
+                        87: 'MediaTrackNext', 88: 'MediaTrackPrevious', 85: 'MediaPlayPause' };
   document.addEventListener('keydown', (e) => {
+    diag(`Key: key=${e.key} code=${e.code} keyCode=${e.keyCode}`);
     if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
-    const k = e.key;
+    const k = e.key && e.key !== 'Unidentified' ? e.key : LEGACY_KEYS[e.keyCode] || e.key;
     let handled = true;
     if (k === 'MediaTrackNext' || k === 'n' || k === 'N') next();
     else if (k === 'MediaTrackPrevious' || k === 'p' || k === 'P') prev();
@@ -489,6 +515,14 @@
     else if (k === 'ArrowLeft' || k === 'j' || k === 'MediaRewind') seekBy(-SEEK_STEP);
     else handled = false;
     if (handled) e.preventDefault();
+  });
+
+  // Key events only reach this page while it has focus, not while the YouTube iframe
+  // has it (after a tap on the video). Take focus back shortly after such a tap.
+  window.addEventListener('blur', () => {
+    setTimeout(() => {
+      if (document.activeElement && document.activeElement.tagName === 'IFRAME') $('focusSink').focus();
+    }, 3000);
   });
 
   // Load the YouTube IFrame API

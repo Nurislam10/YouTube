@@ -11,3 +11,8 @@ A YouTube player page built for car screens (`index.html`).
 
 Turn on GitHub Pages: Settings → Pages → Branch: `main` / root.
 Then open `https://<username>.github.io/youtube/` in the car's browser.
+
+## Test mode
+
+Open `.../youtube/?test` and press the steering wheel buttons: a panel shows which
+signals the browser receives (Media Session actions or key events).
