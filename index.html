@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="kk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f0f0f">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Car YouTube</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --panel: #1c1c1c;
+    --panel-2: #2a2a2a;
+    --panel-3: #3a3a3a;
+    --text: #f1f1f1;
+    --muted: #a0a0a0;
+    --accent: #ff0033;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  button { font: inherit; color: inherit; border: 0; cursor: pointer; touch-action: manipulation; }
+
+  .app {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(320px, 34vw, 520px);
+    gap: 12px;
+    height: 100vh; height: 100dvh;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+             max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+  .stage { position: relative; background: #000; border-radius: var(--radius); overflow: hidden; min-height: 0; }
+  #player, .stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .empty {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    padding: 24px; color: var(--muted); font-size: clamp(18px, 2.2vw, 26px); line-height: 1.4;
+  }
+  .empty[hidden] { display: none; }
+
+  .side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+
+  .now { background: var(--panel); border-radius: var(--radius); padding: 14px 16px; }
+  .title {
+    font-size: clamp(18px, 1.9vw, 24px); font-weight: 600; line-height: 1.25;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    min-height: 2.5em;
+  }
+  .timeline { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 16px; }
+  .timeline input { flex: 1; accent-color: var(--accent); height: 32px; }
+
+  .controls { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1fr 1fr; gap: 8px; }
+  .controls button {
+    height: clamp(64px, 12vh, 104px); border-radius: var(--radius);
+    background: var(--panel-2); display: grid; place-items: center;
+  }
+  .controls button:active { background: var(--panel-3); transform: scale(.97); }
+  .controls button.primary { background: var(--accent); }
+  .controls svg { width: clamp(30px, 5vh, 44px); height: auto; fill: currentColor; }
+  .controls .seek { position: relative; }
+  .controls .seek small { position: absolute; bottom: 8px; font-size: 13px; color: var(--muted); }
+
+  .add { display: flex; gap: 8px; }
+  .add input {
+    flex: 1; min-width: 0; height: 56px; border-radius: var(--radius); border: 1px solid var(--panel-3);
+    background: var(--panel); color: var(--text); padding: 0 16px; font-size: 17px;
+  }
+  .add input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .add button, .tool { height: 56px; padding: 0 18px; border-radius: var(--radius); background: var(--panel-2); font-size: 17px; font-weight: 600; }
+  .add button { background: var(--text); color: var(--bg); }
+
+  .queue-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .queue-head h2 { margin: 0; font-size: 17px; color: var(--muted); font-weight: 600; }
+  .queue-head .tools { display: flex; gap: 8px; }
+  .tool { height: 44px; padding: 0 14px; font-size: 15px; }
+
+  .queue { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+  .queue li { display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 12px; padding: 6px; }
+  .queue li.current { outline: 2px solid var(--accent); }
+  .queue .pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; text-align: left; padding: 0; min-height: 60px; }
+  .queue img { width: 96px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; background: var(--panel-2); flex: none; }
+  .queue .name { font-size: 16px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .queue .badge { display: inline-block; font-size: 12px; background: var(--panel-3); border-radius: 6px; padding: 1px 6px; margin-right: 6px; vertical-align: 1px; }
+  .queue .del { width: 48px; height: 48px; border-radius: 10px; background: none; color: var(--muted); font-size: 26px; flex: none; }
+  .queue .del:active { background: var(--panel-2); }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: var(--panel-3); padding: 12px 20px; border-radius: 12px; font-size: 17px;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+
+  /* Portrait / narrow screens: video on top, controls below */
+  @media (orientation: portrait), (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .stage { aspect-ratio: 16 / 9; }
+  }
+  /* Very short landscape screens (wide car displays) */
+  @media (orientation: landscape) and (max-height: 520px) {
+    .app { gap: 8px; padding: 8px; }
+    .now { padding: 10px 12px; }
+    .title { min-height: 0; -webkit-line-clamp: 1; }
+    .controls button { height: 64px; }
+    .add input, .add button { height: 48px; }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="stage">
+    <div id="player"></div>
+    <div class="empty" id="empty">YouTube сілтемесін (видео немесе плейлист) оң жақтағы өріске қойып, «Қосу» басыңыз.</div>
+  </section>
+
+  <aside class="side">
+    <div class="now">
+      <div class="title" id="title">Ештеңе ойнап тұрған жоқ</div>
+      <div class="timeline">
+        <span id="cur">0:00</span>
+        <input type="range" id="seek" min="0" max="0" step="1" value="0" aria-label="Уақыт">
+        <span id="dur">0:00</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="btnPrev" aria-label="Алдыңғы"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+      <button id="btnBack" class="seek" aria-label="10 секунд артқа"><svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6zm.5-6 8.5 6V6z"/></svg><small>10с</small></button>
+      <button id="btnPlay" class="primary" aria-label="Ойнату / Пауза"><svg viewBox="0 0 24 24" id="icoPlay"><path d="M8 5v14l11-7z"/></svg></button>
+      <button id="btnFwd" class="seek" aria-label="10 секунд алға"><svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6zm9-12v12l8.5-6z"/></svg><small>10с</small></button>
+      <button id="btnNext" aria-label="Келесі"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zM16 6v12h2V6z"/></svg></button>
+    </div>
+
+    <form class="add" id="addForm" autocomplete="off">
+      <input id="url" type="url" inputmode="url" placeholder="YouTube сілтемесі…" aria-label="YouTube сілтемесі">
+      <button type="submit">Қосу</button>
+    </form>
+
+    <div class="queue-head">
+      <h2>Кезек</h2>
+      <div class="tools">
+        <button class="tool" id="btnFull" type="button">Толық экран</button>
+        <button class="tool" id="btnClear" type="button">Тазалау</button>
+      </div>
+    </div>
+    <ol class="queue" id="queue"></ol>
+  </aside>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const SEEK_STEP = 10;
+  const STORE_KEY = 'carTube.v1';
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- state ----------
+  // queue item: { kind: 'video', id, title } | { kind: 'list', list, id?, title }
+  let state = { queue: [], index: -1, pos: 0, listIndex: 0 };
+  try { Object.assign(state, JSON.parse(localStorage.getItem(STORE_KEY)) || {}); } catch (_) {}
+  const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {} };
+
+  let player = null;
+  let playerReady = false;
+  let playing = false;
+
+  // ---------- helpers ----------
+  const fmt = (s) => {
+    s = Math.max(0, Math.floor(s || 0));
+    const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = s % 60;
+    const mm = h ? String(m).padStart(2, '0') : m;
+    return (h ? h + ':' : '') + mm + ':' + String(sec).padStart(2, '0');
+  };
+  const thumb = (id) => id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : '';
+  let toastTimer;
+  const toast = (msg) => {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+  };
+
+  function parseUrl(raw) {
+    raw = raw.trim();
+    if (/^[\w-]{11}$/.test(raw)) return { kind: 'video', id: raw };
+    let u;
+    try { u = new URL(raw.includes('://') ? raw : 'https://' + raw); } catch (_) { return null; }
+    const host = u.hostname.replace(/^(www|m|music)\./, '');
+    let id = null;
+    if (host === 'youtu.be') id = u.pathname.slice(1, 12);
+    else if (host.endsWith('youtube.com') || host.endsWith('youtube-nocookie.com')) {
+      id = u.searchParams.get('v');
+      const m = u.pathname.match(/^\/(shorts|embed|live|v)\/([\w-]{11})/);
+      if (!id && m) id = m[2];
+    } else return null;
+    const list = u.searchParams.get('list');
+    if (list) return { kind: 'list', list, id: id || null };
+    if (id && /^[\w-]{11}$/.test(id)) return { kind: 'video', id };
+    return null;
+  }
+
+  // ---------- silent keep-alive audio ----------
+  // Chrome routes media keys (steering wheel buttons) to the top-most frame that has
+  // a media player. The YouTube player lives in a cross-origin iframe, so without a
+  // player of our own the buttons go to YouTube's embed, which ignores next/previous.
+  const keepAlive = new Audio();
+  keepAlive.loop = true;
+  keepAlive.src = (() => {
+    const rate = 8000, n = rate * 10; // 10 s: Android ignores very short media
+    const buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+    const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true);
+    v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+    new Uint8Array(buf, 44).fill(128);
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  })();
+  const syncKeepAlive = () => {
+    if (playing) keepAlive.play().catch(() => {});
+    else keepAlive.pause();
+  };
+
+  // ---------- media session (steering wheel / Bluetooth / media keys) ----------
+  const ms = 'mediaSession' in navigator ? navigator.mediaSession : null;
+  function setAction(name, fn) { try { ms && ms.setActionHandler(name, fn); } catch (_) {} }
+  setAction('play', () => play());
+  setAction('pause', () => pause());
+  setAction('stop', () => pause());
+  setAction('nexttrack', () => next());
+  setAction('previoustrack', () => prev());
+  setAction('seekforward', (d) => seekBy((d && d.seekOffset) || SEEK_STEP));
+  setAction('seekbackward', (d) => seekBy(-((d && d.seekOffset) || SEEK_STEP)));
+  setAction('seekto', (d) => d && d.seekTime != null && seekTo(d.seekTime));
+
+  function updateMetadata() {
+    if (!ms || !window.MediaMetadata) return;
+    const item = state.queue[state.index];
+    const data = playerReady && player.getVideoData ? player.getVideoData() : {};
+    const id = data.video_id || (item && item.id);
+    ms.metadata = new MediaMetadata({
+      title: data.title || (item && item.title) || 'YouTube',
+      artist: data.author || '',
+      album: 'YouTube',
+      artwork: id ? [
+        { src: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`, sizes: '320x180', type: 'image/jpeg' },
+        { src: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, sizes: '480x360', type: 'image/jpeg' },
+      ] : [],
+    });
+  }
+  function updatePosition(pos, dur) {
+    if (!ms || !ms.setPositionState || !(dur > 0)) return;
+    try { ms.setPositionState({ duration: dur, position: Math.min(pos, dur), playbackRate: 1 }); } catch (_) {}
+  }
+
+  // ---------- player ----------
+  window.onYouTubeIframeAPIReady = () => {
+    player = new YT.Player('player', {
+      playerVars: { playsinline: 1, rel: 0, fs: 0, modestbranding: 1, iv_load_policy: 3 },
+      events: {
+        onReady: () => {
+          playerReady = true;
+          if (state.queue[state.index]) load(state.index, { autoplay: false, resume: true });
+          else if (state.queue.length) load(0, { autoplay: false });
+        },
+        onStateChange: onStateChange,
+        onError: (e) => { toast('Бұл видеоны ойнату мүмкін емес (' + e.data + ')'); setTimeout(next, 1500); },
+      },
+    });
+  };
+
+  function onStateChange(e) {
+    const S = YT.PlayerState;
+    if (e.data === S.PLAYING) playing = true;
+    else if (e.data === S.PAUSED || e.data === S.ENDED) playing = false;
+    if (e.data === S.ENDED) {
+      const item = state.queue[state.index];
+      // playlists advance on their own; only move on when the playlist itself finished
+      if (!item || item.kind !== 'list' || isLastInPlaylist()) next();
+    }
+    if (e.data === S.PLAYING || e.data === S.CUED) refreshNowPlaying();
+    $('icoPlay').innerHTML = playing
+      ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>'
+      : '<path d="M8 5v14l11-7z"/>';
+    if (ms) ms.playbackState = playing ? 'playing' : 'paused';
+    syncKeepAlive();
+  }
+
+  function refreshNowPlaying() {
+    const item = state.queue[state.index];
+    const data = player.getVideoData ? player.getVideoData() : {};
+    if (item) {
+      if (item.kind === 'list') {
+        state.listIndex = Math.max(0, player.getPlaylistIndex());
+        if (data.video_id) item.id = data.video_id;
+        if (!item.listTitle && data.title) item.listTitle = data.title;
+      } else if (data.title) {
+        item.title = data.title;
+      }
+      save();
+      renderQueue();
+    }
+    $('title').textContent = data.title || (item && item.title) || '';
+    updateMetadata();
+  }
+
+  function isLastInPlaylist() {
+    const pl = player.getPlaylist && player.getPlaylist();
+    return !pl || player.getPlaylistIndex() >= pl.length - 1;
+  }
+
+  function load(i, { autoplay = true, resume = false, fromEnd = false } = {}) {
+    const item = state.queue[i];
+    if (!item || !playerReady) return;
+    if (i !== state.index) { state.pos = 0; state.listIndex = 0; }
+    state.index = i;
+    const start = resume ? Math.max(0, (state.pos || 0) - 2) : 0;
+    const method = autoplay ? 'load' : 'cue';
+    if (item.kind === 'list') {
+      const opts = { listType: 'playlist', list: item.list, startSeconds: start };
+      opts.index = fromEnd ? -1 : (resume ? state.listIndex : 0);
+      if (opts.index === -1) {
+        // jump to the last video once the playlist is known
+        player[method + 'Playlist']({ listType: 'playlist', list: item.list });
+        const wait = setInterval(() => {
+          const pl = player.getPlaylist();
+          if (pl && pl.length) { clearInterval(wait); player.playVideoAt(pl.length - 1); }
+        }, 300);
+        setTimeout(() => clearInterval(wait), 8000);
+      } else {
+        player[method + 'Playlist'](opts);
+      }
+    } else {
+      player[method + 'VideoById']({ videoId: item.id, startSeconds: start });
+    }
+    $('empty').hidden = true;
+    $('title').textContent = item.title || item.listTitle || '…';
+    save();
+    renderQueue();
+    updateMetadata();
+  }
+
+  // ---------- commands ----------
+  function play() {
+    if (!playerReady) return;
+    if (state.index < 0 && state.queue.length) return load(0);
+    player.playVideo();
+    keepAlive.play().catch(() => {});
+  }
+  function pause() { if (playerReady) player.pauseVideo(); }
+  function toggle() { playing ? pause() : play(); }
+
+  function next() {
+    if (!playerReady || !state.queue.length) return;
+    const item = state.queue[state.index];
+    if (item && item.kind === 'list' && !isLastInPlaylist()) { player.nextVideo(); return; }
+    if (state.index + 1 < state.queue.length) load(state.index + 1);
+    else toast('Кезектің соңы');
+  }
+  function prev() {
+    if (!playerReady || !state.queue.length) return;
+    // like a car stereo: if more than 5 s in, restart the current video first
+    if (player.getCurrentTime() > 5) { seekTo(0); return; }
+    const item = state.queue[state.index];
+    if (item && item.kind === 'list' && player.getPlaylistIndex() > 0) { player.previousVideo(); return; }
+    if (state.index > 0) load(state.index - 1, { fromEnd: state.queue[state.index - 1].kind === 'list' });
+    else seekTo(0);
+  }
+  function seekTo(t) {
+    if (!playerReady) return;
+    const dur = player.getDuration() || 0;
+    t = Math.max(0, dur ? Math.min(t, dur - 1) : t);
+    player.seekTo(t, true);
+    tick();
+  }
+  function seekBy(d) {
+    if (!playerReady) return;
+    seekTo(player.getCurrentTime() + d);
+    toast((d > 0 ? '+' : '−') + Math.abs(d) + ' сек');
+  }
+
+  // ---------- UI ----------
+  $('btnPlay').onclick = toggle;
+  $('btnNext').onclick = next;
+  $('btnPrev').onclick = prev;
+  $('btnFwd').onclick = () => seekBy(SEEK_STEP);
+  $('btnBack').onclick = () => seekBy(-SEEK_STEP);
+
+  let dragging = false;
+  const seek = $('seek');
+  seek.addEventListener('input', () => { dragging = true; $('cur').textContent = fmt(seek.value); });
+  seek.addEventListener('change', () => { dragging = false; seekTo(+seek.value); });
+
+  function tick() {
+    if (!playerReady || !player.getCurrentTime) return;
+    const pos = player.getCurrentTime() || 0, dur = player.getDuration() || 0;
+    if (!dragging) {
+      seek.max = Math.floor(dur); seek.value = Math.floor(pos);
+      $('cur').textContent = fmt(pos);
+    }
+    $('dur').textContent = fmt(dur);
+    if (playing) updatePosition(pos, dur);
+    if (state.index >= 0 && Math.abs(pos - state.pos) >= 5) { state.pos = pos; save(); }
+  }
+  setInterval(tick, 500);
+
+  $('addForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('url');
+    const parsed = parseUrl(input.value);
+    if (!parsed) { toast('Сілтеме танылмады'); return; }
+    parsed.title = parsed.kind === 'list' ? 'Плейлист' : 'Видео';
+    state.queue.push(parsed);
+    input.value = ''; input.blur();
+    save(); renderQueue();
+    if (state.index < 0 || !playing) load(state.queue.length - 1);
+    else toast('Кезекке қосылды');
+  });
+
+  $('btnClear').onclick = () => {
+    if (!state.queue.length || !confirm('Кезекті толық тазалау керек пе?')) return;
+    state = { queue: [], index: -1, pos: 0, listIndex: 0 };
+    if (playerReady) player.stopVideo();
+    $('empty').hidden = false; $('title').textContent = 'Ештеңе ойнап тұрған жоқ';
+    save(); renderQueue();
+  };
+
+  $('btnFull').onclick = () => {
+    const el = document.documentElement;
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    } else {
+      (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch?.(() => {});
+    }
+  };
+
+  function renderQueue() {
+    const ol = $('queue');
+    ol.textContent = '';
+    state.queue.forEach((item, i) => {
+      const li = document.createElement('li');
+      if (i === state.index) li.className = 'current';
+      const pick = document.createElement('button');
+      pick.className = 'pick'; pick.type = 'button';
+      const img = document.createElement('img');
+      img.alt = ''; img.loading = 'lazy'; img.onerror = () => { img.style.visibility = 'hidden'; };
+      if (item.id) img.src = thumb(item.id);
+      const name = document.createElement('span');
+      name.className = 'name';
+      if (item.kind === 'list') {
+        const b = document.createElement('span'); b.className = 'badge'; b.textContent = 'Плейлист';
+        name.append(b, item.listTitle || item.title || '');
+      } else name.textContent = item.title || item.id;
+      pick.append(img, name);
+      pick.onclick = () => load(i);
+      const del = document.createElement('button');
+      del.className = 'del'; del.type = 'button'; del.textContent = '×'; del.setAttribute('aria-label', 'Өшіру');
+      del.onclick = () => {
+        state.queue.splice(i, 1);
+        if (i < state.index) state.index--;
+        else if (i === state.index) {
+          if (state.queue.length) load(Math.min(i, state.queue.length - 1));
+          else { state.index = -1; if (playerReady) player.stopVideo(); $('empty').hidden = false; }
+        }
+        save(); renderQueue();
+      };
+      li.append(pick, del);
+      ol.append(li);
+    });
+    if (state.queue.length) $('empty').hidden = true;
+  }
+  renderQueue();
+
+  // Keyboard / hardware media keys (some head units send them as key events)
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
+    const k = e.key;
+    let handled = true;
+    if (k === 'MediaTrackNext' || k === 'n' || k === 'N') next();
+    else if (k === 'MediaTrackPrevious' || k === 'p' || k === 'P') prev();
+    else if (k === 'MediaPlayPause' || k === ' ' || k === 'k') toggle();
+    else if (k === 'MediaPlay') play();
+    else if (k === 'MediaPause' || k === 'MediaStop') pause();
+    else if (k === 'ArrowRight' || k === 'l' || k === 'MediaFastForward') seekBy(SEEK_STEP);
+    else if (k === 'ArrowLeft' || k === 'j' || k === 'MediaRewind') seekBy(-SEEK_STEP);
+    else handled = false;
+    if (handled) e.preventDefault();
+  });
+
+  // Load the YouTube IFrame API
+  const s = document.createElement('script');
+  s.src = 'https://www.youtube.com/iframe_api';
+  document.head.append(s);
+})();
+</script>
+</body>
+</html>
