@@ -161,7 +161,7 @@
     </form>
 
     <div class="queue-head">
-      <h2>Кезек <small style="font-weight:400;opacity:.5">v8</small></h2>
+      <h2>Кезек <small style="font-weight:400;opacity:.5">v9</small></h2>
       <div class="tools">
         <button class="tool" id="btnFull" type="button">Толық экран</button>
         <button class="tool" id="btnClear" type="button">Тазалау</button>
@@ -255,9 +255,8 @@
   // a media player. The YouTube player lives in a cross-origin iframe, so without a
   // player of our own the buttons go to YouTube's embed, which ignores next/previous.
   const keepAlive = new Audio();
-  keepAlive.loop = true;
   keepAlive.src = (() => {
-    const rate = 8000, n = rate * 10; // 10 s: Android ignores very short media
+    const rate = 8000, n = rate * 120; // 2 min; restarted by hand so any seek on it comes from outside
     const buf = new ArrayBuffer(44 + n), v = new DataView(buf);
     const w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
     w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt ');
@@ -281,8 +280,17 @@
       .catch((err) => diag('Audio unlock қате: ' + err.name))
       .finally(() => setTimeout(() => { unlocking = false; }, 0));
   }, { once: true });
-  ['seeking', 'ratechange', 'volumechange'].forEach((t) =>
-    keepAlive.addEventListener(t, () => diag('Audio: ' + t + ' t=' + keepAlive.currentTime.toFixed(1))));
+  let ownSeek = false;
+  keepAlive.addEventListener('ended', () => {
+    ownSeek = true; keepAlive.currentTime = 0;
+    if (playing) keepAlive.play().catch(() => {});
+  });
+  keepAlive.addEventListener('seeking', () => {
+    diag('Audio: seeking t=' + keepAlive.currentTime.toFixed(1) + (ownSeek ? ' (өзі)' : ' — СЫРТТАН'));
+    ownSeek = false;
+  });
+  ['ratechange', 'volumechange'].forEach((t) =>
+    keepAlive.addEventListener(t, () => diag('Audio: ' + t)));
   window.addEventListener('popstate', () => diag('popstate (артқа)'));
   document.addEventListener('visibilitychange', () => diag('visibility: ' + document.visibilityState));
   document.addEventListener('keyup', (e) => diag(`KeyUp: key=${e.key} keyCode=${e.keyCode}`));
