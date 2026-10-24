@@ -42,6 +42,17 @@
     padding: 24px; color: var(--muted); font-size: clamp(18px, 2.2vw, 26px); line-height: 1.4;
   }
   .empty[hidden] { display: none; }
+  /* Covers YouTube's pause screen (suggested videos, share, title) while paused */
+  .cover {
+    position: absolute; inset: 0; display: grid; place-items: center; cursor: pointer;
+    background: #000 center / cover no-repeat;
+  }
+  .cover[hidden] { display: none; }
+  .cover span {
+    width: clamp(72px, 12vh, 110px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
+    background: rgba(0,0,0,.55);
+  }
+  .cover svg { width: 46%; fill: #fff; margin-left: 6%; }
 
   .side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 
@@ -122,6 +133,7 @@
 <main class="app">
   <section class="stage">
     <div id="player"></div>
+    <div class="cover" id="cover" hidden><span><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></span></div>
     <div class="empty" id="empty">YouTube сілтемесін (видео немесе плейлист) оң жақтағы өріске қойып, «Қосу» басыңыз.</div>
   </section>
 
@@ -149,7 +161,7 @@
     </form>
 
     <div class="queue-head">
-      <h2>Кезек <small style="font-weight:400;opacity:.5">v6</small></h2>
+      <h2>Кезек <small style="font-weight:400;opacity:.5">v7</small></h2>
       <div class="tools">
         <button class="tool" id="btnFull" type="button">Толық экран</button>
         <button class="tool" id="btnClear" type="button">Тазалау</button>
@@ -306,7 +318,7 @@
   // ---------- player ----------
   window.onYouTubeIframeAPIReady = () => {
     player = new YT.Player('player', {
-      playerVars: { playsinline: 1, rel: 0, fs: 0, modestbranding: 1, iv_load_policy: 3, origin: location.origin },
+      playerVars: { playsinline: 1, controls: 0, disablekb: 1, rel: 0, fs: 0, modestbranding: 1, iv_load_policy: 3, origin: location.origin },
       events: {
         onReady: () => {
           playerReady = true;
@@ -330,7 +342,17 @@
       : '<path d="M8 5v14l11-7z"/>';
     if (ms) ms.playbackState = playing ? 'playing' : 'paused';
     syncKeepAlive();
+    updateCover(e.data);
   }
+
+  function updateCover(st) {
+    const S = YT.PlayerState, cover = $('cover');
+    const data = player.getVideoData ? player.getVideoData() : {};
+    const show = (st === S.PAUSED || st === S.CUED) && data.video_id;
+    if (show) cover.style.backgroundImage = `url(https://i.ytimg.com/vi/${data.video_id}/hqdefault.jpg)`;
+    cover.hidden = !show;
+  }
+  $('cover').onclick = () => play();
 
   function refreshNowPlaying() {
     const item = state.queue[state.index];
