@@ -97,9 +97,9 @@
   .toast.show { opacity: 1; }
   #focusSink { position: fixed; width: 1px; height: 1px; opacity: 0; outline: none; }
   .diag {
-    position: fixed; left: 12px; top: 12px; z-index: 10; width: min(460px, 60vw); max-height: 60vh; overflow-y: auto;
+    position: fixed; left: 12px; bottom: 12px; z-index: 10; width: min(460px, 70vw); max-height: 35vh; overflow-y: auto;
     background: rgba(0,0,0,.85); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 14px;
-    font: 15px/1.45 ui-monospace, monospace; white-space: pre-wrap; word-break: break-all;
+    font: 13px/1.4 ui-monospace, monospace; opacity: .9; white-space: pre-wrap; word-break: break-all;
   }
   .diag[hidden] { display: none; }
 
@@ -161,7 +161,7 @@
 
 <div class="toast" id="toast"></div>
 <div id="focusSink" tabindex="-1"></div>
-<div class="diag" id="diag" hidden></div>
+<div class="diag" id="diag" hidden title="Жасыру үшін басыңыз"></div>
 
 <script>
 (() => {
@@ -208,8 +208,10 @@
     if (!testMode) return;
     diagLines.unshift(new Date().toLocaleTimeString() + '  ' + msg);
     diagLines.length = Math.min(diagLines.length, 30);
-    const el = $('diag'); el.hidden = false; el.textContent = diagLines.join('\n');
+    const el = $('diag'); el.textContent = diagLines.join('\n');
   }
+  if (testMode) $('diag').hidden = false;
+  $('diag').onclick = () => { $('diag').hidden = true; };
   diag('mediaSession: ' + ('mediaSession' in navigator ? 'бар' : 'ЖОҚ') + '\nUA: ' + navigator.userAgent);
   let toastTimer;
   const toast = (msg) => {
