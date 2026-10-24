@@ -239,6 +239,15 @@
     new Uint8Array(buf, 44).fill(128);
     return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
   })();
+  // Browsers without Media Session (LiBrowser in Li Auto cars) drive the page's own media
+  // element directly from the steering wheel; mirror what they do onto the YouTube player.
+  keepAlive.addEventListener('pause', () => { diag('Audio: pause'); if (playing) pause(); });
+  keepAlive.addEventListener('play', () => { diag('Audio: play'); if (!playing) play(); });
+  ['seeking', 'ratechange', 'volumechange'].forEach((t) =>
+    keepAlive.addEventListener(t, () => diag('Audio: ' + t + ' t=' + keepAlive.currentTime.toFixed(1))));
+  window.addEventListener('popstate', () => diag('popstate (артқа)'));
+  document.addEventListener('visibilitychange', () => diag('visibility: ' + document.visibilityState));
+  document.addEventListener('keyup', (e) => diag(`KeyUp: key=${e.key} keyCode=${e.keyCode}`));
   const syncKeepAlive = () => {
     if (playing) keepAlive.play().catch(() => {});
     else keepAlive.pause();
@@ -326,6 +335,7 @@
       renderQueue();
     }
     $('title').textContent = data.title || (item && item.title) || '';
+    if (data.title) document.title = data.title;
     updateMetadata();
   }
 
