@@ -16,3 +16,8 @@ Then open `https://<username>.github.io/youtube/` in the car's browser.
 
 Open `.../youtube/?test` and press the steering wheel buttons: a panel shows which
 signals the browser receives (Media Session actions or key events).
+
+## Open a playlist directly
+
+`https://nurislam10.github.io/YouTube/?list=<playlist id>` opens that playlist right away
+(it continues where it stopped). The playlist must be Public or Unlisted.

@@ -175,6 +175,20 @@
   try { Object.assign(state, JSON.parse(localStorage.getItem(STORE_KEY)) || {}); } catch (_) {}
   const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (_) {} };
 
+  // A video or playlist in the page address (?list=PL... or ?v=...) is opened right away,
+  // so a bookmark can start straight on a prepared playlist.
+  (() => {
+    const q = new URLSearchParams(location.search);
+    const list = q.get('list'), v = q.get('v');
+    const item = list ? { kind: 'list', list, id: null, title: 'Плейлист' }
+      : v && /^[\w-]{11}$/.test(v) ? { kind: 'video', id: v, title: 'Видео' } : null;
+    if (!item) return;
+    let i = state.queue.findIndex((x) => item.kind === 'list' ? x.list === item.list : x.kind === 'video' && x.id === item.id);
+    if (i < 0) { state.queue.push(item); i = state.queue.length - 1; }
+    if (i !== state.index) { state.index = i; state.pos = 0; state.listIndex = 0; }
+    save();
+  })();
+
   let player = null;
   let playerReady = false;
   let playing = false;
