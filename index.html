@@ -306,7 +306,7 @@
   // ---------- player ----------
   window.onYouTubeIframeAPIReady = () => {
     player = new YT.Player('player', {
-      playerVars: { playsinline: 1, rel: 0, fs: 0, modestbranding: 1, iv_load_policy: 3 },
+      playerVars: { playsinline: 1, rel: 0, fs: 0, modestbranding: 1, iv_load_policy: 3, origin: location.origin },
       events: {
         onReady: () => {
           playerReady = true;
