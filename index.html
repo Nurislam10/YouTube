@@ -149,7 +149,7 @@
     </form>
 
     <div class="queue-head">
-      <h2>Кезек</h2>
+      <h2>Кезек <small style="font-weight:400;opacity:.5">v6</small></h2>
       <div class="tools">
         <button class="tool" id="btnFull" type="button">Толық экран</button>
         <button class="tool" id="btnClear" type="button">Тазалау</button>
@@ -361,7 +361,7 @@
       let tries = 0;
       const t = setInterval(() => {
         const pl = player.getPlaylist && player.getPlaylist();
-        if ((pl && pl.length) || ++tries > 60) { clearInterval(t); fetching = false; resolve(pl || []); }
+        if ((pl && pl.length) || ++tries > 32) { clearInterval(t); fetching = false; resolve(pl || []); }
       }, 250);
     });
   }
