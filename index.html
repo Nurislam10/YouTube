@@ -314,7 +314,7 @@
           else if (state.queue.length) load(0, { autoplay: false });
         },
         onStateChange: onStateChange,
-        onError: (e) => { toast('Бұл видеоны ойнату мүмкін емес (' + e.data + ')'); setTimeout(next, 1500); },
+        onError: (e) => { if (fetching) return; toast('Бұл видеоны ойнату мүмкін емес (' + e.data + ')'); setTimeout(next, 1500); },
       },
     });
   };
@@ -323,11 +323,7 @@
     const S = YT.PlayerState;
     if (e.data === S.PLAYING) playing = true;
     else if (e.data === S.PAUSED || e.data === S.ENDED) playing = false;
-    if (e.data === S.ENDED) {
-      const item = state.queue[state.index];
-      // playlists advance on their own; only move on when the playlist itself finished
-      if (!item || item.kind !== 'list' || isLastInPlaylist()) next();
-    }
+    if (e.data === S.ENDED) next();
     if (e.data === S.PLAYING || e.data === S.CUED) refreshNowPlaying();
     $('icoPlay').innerHTML = playing
       ? '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>'
@@ -341,9 +337,7 @@
     const data = player.getVideoData ? player.getVideoData() : {};
     if (item) {
       if (item.kind === 'list') {
-        state.listIndex = Math.max(0, player.getPlaylistIndex());
         if (data.video_id) item.id = data.video_id;
-        if (!item.listTitle && data.title) item.listTitle = data.title;
       } else if (data.title) {
         item.title = data.title;
       }
@@ -355,37 +349,50 @@
     updateMetadata();
   }
 
-  function isLastInPlaylist() {
-    const pl = player.getPlaylist && player.getPlaylist();
-    return !pl || player.getPlaylistIndex() >= pl.length - 1;
+  // Playlists are played video by video (loadVideoById). The embed's own playlist mode
+  // fails on some playlists/browsers ("An error occurred", code 2) while single videos play.
+  // The video list is read once per page load, so videos added on YouTube show up.
+  const fetchedLists = new Set();
+  let fetching = false;
+  function fetchPlaylist(list) {
+    fetching = true;
+    return new Promise((resolve) => {
+      player.cuePlaylist({ listType: 'playlist', list });
+      let tries = 0;
+      const t = setInterval(() => {
+        const pl = player.getPlaylist && player.getPlaylist();
+        if ((pl && pl.length) || ++tries > 60) { clearInterval(t); fetching = false; resolve(pl || []); }
+      }, 250);
+    });
   }
 
-  function load(i, { autoplay = true, resume = false, fromEnd = false } = {}) {
+  function hasNextInList(item) { return item && item.kind === 'list' && state.listIndex < (item.videos || []).length - 1; }
+
+  let loadToken = 0;
+  async function load(i, { autoplay = true, resume = false, fromEnd = false } = {}) {
     const item = state.queue[i];
     if (!item || !playerReady) return;
     if (i !== state.index) { state.pos = 0; state.listIndex = 0; }
     state.index = i;
-    const start = resume ? Math.max(0, (state.pos || 0) - 2) : 0;
-    const method = autoplay ? 'load' : 'cue';
-    if (item.kind === 'list') {
-      const opts = { listType: 'playlist', list: item.list, startSeconds: start };
-      opts.index = fromEnd ? -1 : (resume ? state.listIndex : 0);
-      if (opts.index === -1) {
-        // jump to the last video once the playlist is known
-        player[method + 'Playlist']({ listType: 'playlist', list: item.list });
-        const wait = setInterval(() => {
-          const pl = player.getPlaylist();
-          if (pl && pl.length) { clearInterval(wait); player.playVideoAt(pl.length - 1); }
-        }, 300);
-        setTimeout(() => clearInterval(wait), 8000);
-      } else {
-        player[method + 'Playlist'](opts);
-      }
-    } else {
-      player[method + 'VideoById']({ videoId: item.id, startSeconds: start });
-    }
+    const token = ++loadToken;
     $('empty').hidden = true;
-    $('title').textContent = item.title || item.listTitle || '…';
+    $('title').textContent = item.title || '…';
+    save();
+    renderQueue();
+    let videoId = item.id;
+    if (item.kind === 'list') {
+      if (!fetchedLists.has(item.list) || !(item.videos && item.videos.length)) {
+        const videos = await fetchPlaylist(item.list);
+        if (token !== loadToken) return;
+        if (videos.length) { item.videos = videos; fetchedLists.add(item.list); }
+      }
+      if (!(item.videos && item.videos.length)) { toast('Плейлист ашылмады. Ол Public не Unlisted болуы керек'); return; }
+      if (fromEnd) state.listIndex = item.videos.length - 1;
+      state.listIndex = Math.min(Math.max(0, state.listIndex || 0), item.videos.length - 1);
+      videoId = item.videos[state.listIndex];
+    }
+    const start = resume ? Math.max(0, (state.pos || 0) - 2) : 0;
+    player[(autoplay ? 'load' : 'cue') + 'VideoById']({ videoId, startSeconds: start });
     save();
     renderQueue();
     updateMetadata();
@@ -404,7 +411,7 @@
   function next() {
     if (!playerReady || !state.queue.length) return;
     const item = state.queue[state.index];
-    if (item && item.kind === 'list' && !isLastInPlaylist()) { player.nextVideo(); return; }
+    if (hasNextInList(item)) { state.listIndex++; state.pos = 0; load(state.index); return; }
     if (state.index + 1 < state.queue.length) load(state.index + 1);
     else toast('Кезектің соңы');
   }
@@ -413,7 +420,7 @@
     // like a car stereo: if more than 5 s in, restart the current video first
     if (player.getCurrentTime() > 5) { seekTo(0); return; }
     const item = state.queue[state.index];
-    if (item && item.kind === 'list' && player.getPlaylistIndex() > 0) { player.previousVideo(); return; }
+    if (item && item.kind === 'list' && state.listIndex > 0) { state.listIndex--; state.pos = 0; load(state.index); return; }
     if (state.index > 0) load(state.index - 1, { fromEnd: state.queue[state.index - 1].kind === 'list' });
     else seekTo(0);
   }
@@ -500,7 +507,7 @@
       name.className = 'name';
       if (item.kind === 'list') {
         const b = document.createElement('span'); b.className = 'badge'; b.textContent = 'Плейлист';
-        name.append(b, item.listTitle || item.title || '');
+        name.append(b, item.videos ? (i === state.index ? (state.listIndex + 1) + ' / ' : '') + item.videos.length + ' видео' : '');
       } else name.textContent = item.title || item.id;
       pick.append(img, name);
       pick.onclick = () => load(i);
