@@ -161,7 +161,7 @@
     </form>
 
     <div class="queue-head">
-      <h2>Кезек <small style="font-weight:400;opacity:.5">v7</small></h2>
+      <h2>Кезек <small style="font-weight:400;opacity:.5">v8</small></h2>
       <div class="tools">
         <button class="tool" id="btnFull" type="button">Толық экран</button>
         <button class="tool" id="btnClear" type="button">Тазалау</button>
@@ -269,8 +269,18 @@
   })();
   // Browsers without Media Session (LiBrowser in Li Auto cars) drive the page's own media
   // element directly from the steering wheel; mirror what they do onto the YouTube player.
-  keepAlive.addEventListener('pause', () => { diag('Audio: pause'); if (playing) pause(); });
-  keepAlive.addEventListener('play', () => { diag('Audio: play'); if (!playing) play(); });
+  let unlocking = false;
+  keepAlive.addEventListener('pause', () => { diag('Audio: pause'); if (!unlocking && playing) pause(); });
+  keepAlive.addEventListener('play', () => { diag('Audio: play'); if (!unlocking && !playing) play(); });
+  // Android WebView only lets media start from a tap; unlock the audio on the first tap
+  // anywhere on the page so it can follow the video later.
+  document.addEventListener('pointerdown', () => {
+    if (!keepAlive.paused) return;
+    unlocking = true;
+    keepAlive.play().then(() => { if (!playing) keepAlive.pause(); })
+      .catch((err) => diag('Audio unlock қате: ' + err.name))
+      .finally(() => setTimeout(() => { unlocking = false; }, 0));
+  }, { once: true });
   ['seeking', 'ratechange', 'volumechange'].forEach((t) =>
     keepAlive.addEventListener(t, () => diag('Audio: ' + t + ' t=' + keepAlive.currentTime.toFixed(1))));
   window.addEventListener('popstate', () => diag('popstate (артқа)'));
@@ -333,6 +343,7 @@
 
   function onStateChange(e) {
     const S = YT.PlayerState;
+    diag('YouTube күйі: ' + ({ '-1': 'бастау', 0: 'бітті', 1: 'ойнап тұр', 2: 'пауза', 3: 'жүктелуде', 5: 'дайын' }[e.data] || e.data));
     if (e.data === S.PLAYING) playing = true;
     else if (e.data === S.PAUSED || e.data === S.ENDED) playing = false;
     if (e.data === S.ENDED) next();
@@ -348,7 +359,7 @@
   function updateCover(st) {
     const S = YT.PlayerState, cover = $('cover');
     const data = player.getVideoData ? player.getVideoData() : {};
-    const show = (st === S.PAUSED || st === S.CUED) && data.video_id;
+    const show = st === S.PAUSED && data.video_id;
     if (show) cover.style.backgroundImage = `url(https://i.ytimg.com/vi/${data.video_id}/hqdefault.jpg)`;
     cover.hidden = !show;
   }
@@ -424,8 +435,9 @@
   function play() {
     if (!playerReady) return;
     if (state.index < 0 && state.queue.length) return load(0);
+    diag('play() басылды');
     player.playVideo();
-    keepAlive.play().catch(() => {});
+    keepAlive.play().catch((err) => diag('Audio play қате: ' + err.name));
   }
   function pause() { if (playerReady) player.pauseVideo(); }
   function toggle() { playing ? pause() : play(); }
